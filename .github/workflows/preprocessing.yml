@@ -1,43 +1,43 @@
-name: Preprocessing Automation
+name: Data Preprocessing Automation
 
-on:
+on: 
   push:
-    branches:
+    branches: 
       - main
       - master
     paths:
       - 'Credit Card Dataset_raw/**'
       - 'Preprocessing/automate_BintangPalinrungi.py'
   pull_request:
-    branches:
+    branches: 
       - main
       - master
-  workflow_dispatch:   # Allows manual trigger
+  workflow_dispatch:  # Manual trigger
 
 jobs:
-  preprocessing:
+  preprocessing: 
     runs-on: ubuntu-latest
     
-    steps:
+    steps: 
       # Checkout repository
-      - name:  Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
       # Setup Python 3.10
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
-        with:
+        with: 
           python-version: "3.10"
       
-      # Install dependencies
+      # Install dependencies from requirements. txt
       - name: Install dependencies
-        run:  |
+        run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy scikit-learn imbalanced-learn
+          pip install -r requirements.txt
       
       # Run preprocessing script
       - name: Run preprocessing automation
-        run: |
+        run:  |
           cd Preprocessing
           python automate_BintangPalinrungi.py
         continue-on-error: false
@@ -45,15 +45,25 @@ jobs:
       # Verify output files
       - name: Verify preprocessed data
         run: |
-          echo "Checking preprocessed data files..."
-          ls -lh Preprocessing/CreditCard_Preprocessing/
-          echo "✅ Preprocessing completed successfully!"
+          echo "📂 Checking preprocessed data files..."
+          ls -lh Preprocessing/CreditCard_Preprocessing/ || echo "Folder not found"
+          if [ -f "Preprocessing/CreditCard_Preprocessing/train_data.csv" ]; then
+            echo "✅ train_data.csv found"
+          else
+            echo "❌ train_data.csv NOT found"
+          fi
+          if [ -f "Preprocessing/CreditCard_Preprocessing/test_data.csv" ]; then
+            echo "✅ test_data.csv found"
+          else
+            echo "❌ test_data.csv NOT found"
+          fi
       
       # Upload preprocessed data as artifact
       - name: Upload preprocessed data
-        uses: actions/upload-artifact@v4  # ✅ Changed from v3 to v4
+        uses: actions/upload-artifact@v4
+        if: success()
         with:
-          name: preprocessed-creditcard-data
+          name: preprocessed-creditcard-data-${{ github.run_number }}
           path: |
             Preprocessing/CreditCard_Preprocessing/train_data.csv
             Preprocessing/CreditCard_Preprocessing/test_data.csv
@@ -62,33 +72,44 @@ jobs:
       
       # Create summary
       - name: Create preprocessing summary
+        if: success()
         run: |
           echo "## 📊 Preprocessing Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ **Status:** Preprocessing completed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "🔧 **Script:** automate_BintangPalinrungi.py" >> $GITHUB_STEP_SUMMARY
+          echo "👤 **Author:** A.  Muh.  Bintang Palinrungi" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Generated Files:" >> $GITHUB_STEP_SUMMARY
           echo "- \`train_data.csv\` - Training dataset" >> $GITHUB_STEP_SUMMARY
           echo "- \`test_data.csv\` - Testing dataset" >> $GITHUB_STEP_SUMMARY
           echo "- \`preprocessor.pkl\` - Preprocessing pipeline" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📈 Dataset Statistics:" >> $GITHUB_STEP_SUMMARY
-          python3 << EOF
+          
+          # Display dataset statistics
+          if [ -f "Preprocessing/CreditCard_Preprocessing/train_data.csv" ]; then
+            echo "### 📈 Dataset Statistics:" >> $GITHUB_STEP_SUMMARY
+            python3 << 'EOF'
           import pandas as pd
-          train = pd.read_csv('Preprocessing/CreditCard_Preprocessing/train_data.csv')
-          test = pd.read_csv('Preprocessing/CreditCard_Preprocessing/test_data.csv')
-          print(f"- Training samples: {len(train):,}")
-          print(f"- Testing samples: {len(test):,}")
-          print(f"- Total features: {train.shape[1] - 1}")
-          print(f"- Fraud cases (train): {train['is_fraud'].sum():,}")
-          print(f"- Fraud cases (test): {test['is_fraud'].sum():,}")
+          try:
+              train = pd.read_csv('Preprocessing/CreditCard_Preprocessing/train_data.csv')
+              test = pd.read_csv('Preprocessing/CreditCard_Preprocessing/test_data.csv')
+              print(f"- Training samples: {len(train):,}")
+              print(f"- Testing samples:  {len(test):,}")
+              print(f"- Total features: {train.shape[1] - 1}")
+              if 'is_fraud' in train.columns:
+                  print(f"- Fraud cases (train): {train['is_fraud'].sum():,}")
+                  print(f"- Fraud cases (test): {test['is_fraud'].sum():,}")
+          except Exception as e:
+              print(f"Error reading data: {e}")
           EOF
+          fi
       
-      # Optional:  Commit preprocessed data back to repo
+      # Optional: Commit preprocessed data back to repo
       - name: Commit preprocessed data
-        if: github. event_name == 'push'
+        if: github.event_name == 'push' && success()
         run: |
-          git config --local user.email "github-actions[bot]@users. noreply.github.com"
+          git config --local user. email "github-actions[bot]@users. noreply.github.com"
           git config --local user. name "github-actions[bot]"
-          git add Preprocessing/CreditCard_Preprocessing/*.csv Preprocessing/CreditCard_Preprocessing/*.pkl
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Auto-update:  Preprocessed data $(date +'%Y-%m-%d %H:%M:%S')" && git push)
+          git add Preprocessing/CreditCard_Preprocessing/*.csv Preprocessing/CreditCard_Preprocessing/*.pkl 2>/dev/null || true
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Auto-update:  Preprocessed data $(date +'%Y-%m-%d %H:%M:%S')" && git push) || echo "Nothing to commit"
