@@ -109,7 +109,7 @@ jobs:
       - name: Commit preprocessed data
         if: github.event_name == 'push' && success()
         run: |
-          git config --local user. email "github-actions[bot]@users. noreply.github.com"
-          git config --local user. name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users. noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add Preprocessing/CreditCard_Preprocessing/*.csv Preprocessing/CreditCard_Preprocessing/*.pkl 2>/dev/null || true
           git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Auto-update:  Preprocessed data $(date +'%Y-%m-%d %H:%M:%S')" && git push) || echo "Nothing to commit"
