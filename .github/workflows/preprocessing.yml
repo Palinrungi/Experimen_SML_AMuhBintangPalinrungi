@@ -1,0 +1,94 @@
+name: Preprocessing Automation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'Credit Card Dataset_raw/**'
+      - 'Preprocessing/automate_BintangPalinrungi.py'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  preprocessing:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      # Setup Python 3.10
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy scikit-learn imbalanced-learn
+      
+      # Run preprocessing script
+      - name: Run preprocessing automation
+        run: |
+          cd Preprocessing
+          python automate_BintangPalinrungi.py
+        continue-on-error: false
+      
+      # Verify output files
+      - name: Verify preprocessed data
+        run: |
+          echo "Checking preprocessed data files..."
+          ls -lh Preprocessing/CreditCard_Preprocessing/
+          echo "✅ Preprocessing completed successfully!"
+      
+      # Upload preprocessed data as artifact
+      - name: Upload preprocessed data
+        uses: actions/upload-artifact@v3
+        with:
+          name: preprocessed-creditcard-data
+          path: |
+            Preprocessing/CreditCard_Preprocessing/train_data.csv
+            Preprocessing/CreditCard_Preprocessing/test_data.csv
+            Preprocessing/CreditCard_Preprocessing/preprocessor.pkl
+          retention-days: 30
+      
+      # Create summary
+      - name: Create preprocessing summary
+        run: |
+          echo "## 📊 Preprocessing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Status:** Preprocessing completed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Generated Files:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`train_data.csv\` - Training dataset" >> $GITHUB_STEP_SUMMARY
+          echo "- \`test_data.csv\` - Testing dataset" >> $GITHUB_STEP_SUMMARY
+          echo "- \`preprocessor.pkl\` - Preprocessing pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📈 Dataset Statistics:" >> $GITHUB_STEP_SUMMARY
+          python3 << EOF
+          import pandas as pd
+          train = pd.read_csv('Preprocessing/CreditCard_Preprocessing/train_data.csv')
+          test = pd.read_csv('Preprocessing/CreditCard_Preprocessing/test_data.csv')
+          print(f"- Training samples: {len(train):,}")
+          print(f"- Testing samples: {len(test):,}")
+          print(f"- Total features: {train.shape[1] - 1}")
+          print(f"- Fraud cases (train): {train['is_fraud'].sum():,}")
+          print(f"- Fraud cases (test): {test['is_fraud'].sum():,}")
+          EOF
+      
+      # Optional: Commit preprocessed data back to repo
+      - name: Commit preprocessed data
+        if: github.event_name == 'push'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Preprocessing/CreditCard_Preprocessing/*.csv Preprocessing/CreditCard_Preprocessing/*.pkl
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Auto-update: Preprocessed data $(date +'%Y-%m-%d %H:%M:%S')" && git push)
